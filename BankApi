@@ -1,0 +1,352 @@
+  
+import UIKit
+import PlaygroundSupport
+protocol DatasUsers {
+    var nameUser: String {get} //фио клиента
+    var cardNumber: String {get} //номер карты
+    var cardCod: Int {get} //пин-код
+    var numberMovile: String {get}//номер телефона
+    var movileBalance: Float {get set}//баланс телефона
+    var balanceCash: Float {get set}//баланс счета
+    var balanceDeposite: Float {get set}//баланс депозита
+}
+
+protocol BankApi {
+    func showClientCardBalance()
+    func showClientDepositBalance()
+    func showClientTopUpCard(cash: Float)
+    func showClientTopUpDeposit(deposit: Float)
+    func showClientWithdrawalCard(cash: Float)
+    func showClientWithdrawalDeposit(deposit: Float)
+    func showUserToppedUpMobilePhoneCash(cash: Float)
+    func showUserToppedUpMobilePhoneDeposit(deposit: Float)
+    func showError(error: ErrorDate)
+    
+    func checkUserPhone(phone: String) -> Bool
+    func checkMaxUserCash(cash: Float) -> Bool
+    func checkMaxUserCard(withdraw: Float) -> Bool
+    func checkCurrentUser(cardNumber: String, cardCod: Int) -> Bool
+    
+    mutating func topUpPhoneBalanceCash(pay: Float)
+    mutating func topUpPhoneBalanceCard(pay: Float)
+    mutating func getCashFromDeposit(cash: Float)
+    mutating func getCashFromCard(cash: Float)
+    mutating func putCashDeposit(topUp: Float)
+    mutating func putCashCard(topUp: Float)
+    
+}
+//ошибки пользователя
+enum ErrorDate: String {
+    case NUMBER_THE_USER_OR_PIN_INCORRECT = "имя или пин код введены не верно"
+    case NUMBER_OF_PHONE_INCORRECT = "номер телефона указан не верно"
+    case NOT_ENOUGH_MONEY_IN_DEPOSITE = "недостаточно средств на депозите"
+    case NOT_ENOUGH_MONEY_IN_CASH = "недостаточно средств"
+    case COMMUNICATION_ERROR = "ошибка связи"
+
+}
+//способы оплаты/пополнения наличными-картой или через депозит
+enum PaymentMethods {
+    case cash(cash: Float)
+    case deposit(deposit: Float)
+}
+//виды операций выбранные пользователем
+enum DescripcionTypeAvailableOperations: String {
+    //запрос баланса по карте и на банковском депозите;
+    case balanceDeposit = " узнать баланс депозита"
+    case balanceCash = " узнать баланс счета"
+    //снятие наличных с карты или банковского депозита;
+    case withDrewDeposit = " снять деньги с депозита"
+    case withDrewCash = " снять деньни с счета"
+    //пополнение карты и банковского депозита наличными;
+    case putMoneyDeposit = " зачислить деньги на депозит"
+    case putMoneyCash = " зачислить деньги на счет"
+    //пополнение баланса телефона наличными или с карты.
+    case moneyOnPhoneCash = " зачислить наличные на телефон"
+    case moneyOnPhoneDeposit = " зачислить деньги на телефон с депозита"
+}
+//методы взаимодействия с банком (methods interacion) users actions
+enum MethodsInteracion {
+    case clientRequestBalance(balanceDeposit: Float) //запрос баланса
+    case clientRequestBankAccaunt(balanceCashAccaunt: Float) //запрос остатка по счету
+    case clientPutUpDeposit(putMoneyDeposit: Float) //положить деньги на депозит
+    case clientPutUpCashAccaunt(putMoneyCashAccaunt: Float) //положить деньги на счет
+    case clientWithdrawDeposit(withdrawDeposit: Float) //снять деньги с депозита
+    case clientWithdrewCash(withdrawCash: Float) //снять деньги с счета
+    case clientPayPhone(moneyOnPhoneCash: String) //пополнить баланс телефона
+}
+    class ATM {
+        private let cardNumber: String
+        private let cardCod: Int
+        private let phone: String
+        private var someBank: BankApi
+        private let actions: MethodsInteracion
+        private let paymentMethod: PaymentMethods?
+        
+        init(cardNumber: String, cardCod: Int, phone: String, someBank: BankApi, actions: MethodsInteracion, paymentMethod: PaymentMethods? = nil) {
+            
+            self.cardNumber = cardNumber
+            self.cardCod = cardCod
+            self.phone = phone
+            self.someBank = someBank
+            self.actions = actions
+            self.paymentMethod = paymentMethod
+            
+            sendClientDataToBank (cardNumber: cardNumber, cardCod: cardCod, action: actions, payment: paymentMethod)
+        }
+    
+        public final func sendClientDataToBank(cardNumber:String, cardCod: Int, action: MethodsInteracion, payment: PaymentMethods?) {
+            let isClientExist = someBank.checkCurrentUser(cardNumber: cardNumber, cardCod: cardCod)
+            if isClientExist {
+                switch actions {
+                case .clientRequestBalance: someBank.showClientCardBalance()
+                case let .clientPayPhone(moneyOnPhoneCash: phone):
+                    if someBank.checkUserPhone(phone: phone){
+                        if let payment = payment {
+                            switch payment {
+                        case let .cash(cash: payment):
+                if someBank.checkMaxUserCash(cash: payment) {
+                   someBank.topUpPhoneBalanceCard(pay: payment)
+                   someBank.showUserToppedUpMobilePhoneCash(cash: payment)
+                    } else {
+                    someBank.showError(error: .NOT_ENOUGH_MONEY_IN_CASH)
+                        }
+            case let .deposit(deposit: payment):
+                    if someBank.checkMaxUserCard(withdraw: payment) {
+                        someBank.topUpPhoneBalanceCard(pay: payment)
+                        someBank.showUserToppedUpMobilePhoneDeposit(deposit: payment)
+                    } else {
+                        someBank.showError(error: .NOT_ENOUGH_MONEY_IN_DEPOSITE)
+                    }
+                            }
+                        }
+                    } else {
+                            someBank.showError(error: .NUMBER_OF_PHONE_INCORRECT)
+    }
+                case let .clientPutUpDeposit(putMoneyDeposit: payment):
+                    if someBank.checkMaxUserCash(cash: payment) {
+                        someBank.putCashDeposit(topUp: payment)
+                        someBank.showClientTopUpDeposit(deposit: payment)
+                    } else {
+                        someBank.showError(error: .NOT_ENOUGH_MONEY_IN_CASH)
+                    }
+                case let .clientPutUpCashAccaunt(withdrawCash):
+                    if someBank.checkMaxUserCard(withdraw: withdrawCash) {
+                        someBank.showClientWithdrawalCard(cash: withdrawCash)
+                    } else {
+                        someBank.showError(error: .NOT_ENOUGH_MONEY_IN_DEPOSITE)
+                    }
+                case .clientRequestBankAccaunt: someBank.showClientDepositBalance()
+                    
+                case let.clientWithdrawDeposit(withdrawDeposit: withdrawDeposit):
+                    if someBank.checkMaxUserCard(withdraw: withdrawDeposit) {
+                    someBank.showClientWithdrawalDeposit(deposit: withdrawDeposit)
+                }
+                case let.clientWithdrewCash(withdrawCash: withdrawCash):
+                    if someBank.checkMaxUserCash(cash: withdrawCash) {
+                        someBank.checkMaxUserCard(withdraw: withdrawCash)
+                    }
+                }
+        } else {
+                someBank.showError(error: .COMMUNICATION_ERROR)
+            }
+        }
+    }
+
+struct BankServer: BankApi {
+    
+    
+    private var client: DatasUsers
+    
+    init(client: DatasUsers) {
+        self.client = client
+    }
+    public func showClientCardBalance() {
+        let rep = """
+Добрый день,\(client.nameUser)\(DescripcionTypeAvailableOperations.balanceCash.rawValue)
+Ваш баланс карты составляет: \(client.balanceCash) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+    
+    public func showClientDepositBalance() {
+        let rep = """
+Добрый день \(client.nameUser)\(DescripcionTypeAvailableOperations.balanceDeposit.rawValue)
+Ваш баланс карты составляет: \(client.balanceDeposite) рублей
+Хорошего дня!
+"""
+print (rep)
+    
+    }
+    
+    public func showClientTopUpCard(cash:Float) {
+        let rep = """
+Добрый день\(client.nameUser)\(DescripcionTypeAvailableOperations.balanceCash.rawValue)
+На ваш счет карты зачислена сумма: \(cash)
+Счет карты составляет: \(client.balanceCash) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+    
+    public func showClientTopUpDeposit(deposit:Float) {
+        let rep = """
+Добрый день\(client.nameUser)\(DescripcionTypeAvailableOperations.balanceDeposit.rawValue)
+На ваш депозит зачислена: \(deposit)
+Счет вашего депозита: \(client.balanceDeposite) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+    
+    public func showClientWithdrawalCard(cash:Float) {
+        let rep = """
+Добрый день\(client.nameUser)\(DescripcionTypeAvailableOperations.balanceCash.rawValue)
+С вашей карты снята сумма: \(cash)
+Счет вашей карты составляет: \(client.balanceCash) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+    
+    public func showClientWithdrawalDeposit(deposit:Float) {
+        let rep = """
+Добрый день \(client.nameUser)\(DescripcionTypeAvailableOperations.balanceDeposit.rawValue)
+C вашего депозита снята сумма: \(deposit)
+Счет вашего депозита составляет: \(client.balanceDeposite) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+
+    public func showUserToppedUpMobilePhoneCash(cash:Float) {
+        let rep = """
+Добрый день \(client.nameUser)\(DescripcionTypeAvailableOperations.balanceCash.rawValue)
+Вы пополнили баланс телефона с карты на сумму\(cash)
+Баланс вашего телефона составляет \(client.movileBalance) рублей
+У вас осталось на депозите \(client.balanceCash) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+    public func showUserToppedUpMobilePhoneDeposit(deposit:Float) {
+        let rep = """
+Добрый день \(client.nameUser)\(DescripcionTypeAvailableOperations.moneyOnPhoneDeposit.rawValue)
+вы пополнили баланс телефона с депозита на сумму\(deposit)
+Баланс вашего телефона составляет \(client.movileBalance) рублей
+У вас омталось на депозите \(client.balanceDeposite) рублей
+Хорошего дня!
+"""
+        print(rep)
+    }
+    
+    public func showError(error: ErrorDate) {
+        let error = """
+Здравствуйте \(client.nameUser)
+Ошибка: \(error.rawValue)
+Хорошего дня!
+"""
+        print(error)
+
+    }
+    public mutating func topUpPhoneBalanceCash(pay: Float) {
+        client.balanceDeposite += pay
+        client.balanceCash -= pay
+    }
+    public mutating func topUpPhoneBalanceCard(pay: Float) {
+        client.movileBalance += pay
+        client.balanceCash -= pay
+    }
+
+    public mutating func getCashFromDeposit(cash: Float) {
+        client.balanceDeposite -= cash
+        client.balanceCash += cash
+    }
+    
+    public mutating func getCashFromCard (cash: Float) {
+        client.balanceCash -= cash
+    }
+    
+    public mutating func putCashDeposit (topUp: Float) {
+        client.balanceDeposite += topUp
+        client.balanceCash -= topUp
+    }
+    
+    public mutating func putCashCard (topUp: Float) {
+        client.balanceDeposite += topUp
+        client.balanceCash -= topUp
+    }
+    public func checkUserPhone(phone: String) -> Bool {
+        if phone == client.numberMovile {
+            return true
+        }
+        return false
+    }
+    public func checkMaxUserCash(cash: Float) -> Bool {
+        if cash <= client.balanceDeposite {
+            return true
+        }
+        return false
+    }
+    public func checkMaxUserCard(withdraw: Float) -> Bool {
+        if withdraw <= client.balanceCash {
+            return true
+        }
+        return false
+    }
+    public func checkCurrentUser(cardNumber: String, cardCod: Int) -> Bool {
+        let isCorrectCardNumber = checkId(id: cardNumber, client: client)
+        let isCoorectCardCod = checkCod(cod: cardCod, client: client)
+        
+        if isCorrectCardNumber && isCoorectCardCod {
+            return true
+        }
+        return false
+    }
+    private func checkId(id: String, client: DatasUsers) -> Bool {
+        if  id == client.cardNumber {
+            return true
+        }
+        return false
+    }
+    private func checkCod(cod: Int, client: DatasUsers) -> Bool {
+        if cod == client.cardCod {
+            return true
+        }
+        return false
+    }
+}
+
+struct Client: DatasUsers {
+    var nameUser: String
+    var cardNumber: String
+    var cardCod: Int
+    var numberMovile: String
+    var movileBalance: Float
+    var balanceCash: Float
+    var balanceDeposite: Float
+    
+}
+//пользовательские данные:
+let irina_sakovich: DatasUsers = Client(nameUser: "Irina Sakovich", cardNumber: "1234 2345 2334 2344", cardCod: 1223, numberMovile: "+(34)659880959", movileBalance: -1000, balanceCash: 5000, balanceDeposite: 90000)
+
+// банк, который регистрировал пользователя
+
+let bankClient = BankServer(client:irina_sakovich)
+
+let atm123 = ATM(
+    cardNumber: "1234 2345 2334 2344",
+    cardCod: 1223,
+    phone: "+(34)659880968",
+    someBank: bankClient,
+    actions: .clientWithdrawDeposit(withdrawDeposit: 5000),
+    paymentMethod: .deposit(deposit: 3000)
+    )
+    
+    
+let atm122 = ATM(
+cardNumber: "1233, 4567 3566 3321",
+cardCod: 1111, phone: "+34659880968",
+someBank: bankClient,
+actions: .clientPayPhone(moneyOnPhoneCash: "+34659880968"),
+paymentMethod: .cash(cash: 1000))
